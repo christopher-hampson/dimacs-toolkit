@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# =============================================================================
+# Created By  : Christopher Hampson
+# Created Date: 10-May-2021
+# =============================================================================
 import networkx as nx
 import itertools
 from dimacs import Formula, Clause, Prop
@@ -12,7 +18,7 @@ def labEUL_to_SAT(G,cycle_length=8):
 	## list labels used
 	for (u,v,data) in G.edges(data=True):
 		for i in range(cycle_length):
-			p = Prop("edge_used({0:02d}:{1},{2})".format(i,u,v))
+			p = Prop("edge_used({0:02d}:{1}->{2},{3})".format(i,u,v,data))
 			q = Prop("label_used({0:02d}:{1})".format(i,data.get('label','')))
 			F.add(Clause(-p,q))
 			labels.add(data.get('label',''))
@@ -44,26 +50,18 @@ def EUL_to_SAT(G,cycle_length=None):
 		for i in range(cycle_length):
 			p = Prop("position({0:02d},{1})".format(i,u))
 			C = Clause(-p)
-			for v in G.successors(u):
-				q = Prop("edge_used({0:02d}:{1},{2})".format(i,u,v))
+			for (u1,v,d) in [e for e in G.edges(data=True) if e[0]==u]:
+				q = Prop("edge_used({0:02d}:{1}->{2},{3})".format(i,u,v,d))
 				C.add(q)
 			F.add(C)
 
-	## don't use edges that don't exist (might be redundant)
-	for (u,v) in itertools.permutations(G.nodes(),2):
-		if (u,v) not in G.edges():
-			for i in range(cycle_length):
-				p = Prop("edge_used({0:02d}:{1},{2})".format(i,u,v))
-				F.add(Clause(-p))
-
-
 	## path coherence (if edge (u,v) is ith edge then u is ith vertex and v is (i+1)th vertex)
-	for (u,v) in G.edges():
+	for (u,v,d) in G.edges(data=True):
 		for i in range(cycle_length):
 			j = (i+1)%cycle_length
 			p = Prop("position({0:02d},{1})".format(i,u))
 			q = Prop("position({0:02d},{1})".format(j,v))
-			r = Prop("edge_used({0:02d}:{1},{2})".format(i,u,v))
+			r = Prop("edge_used({0:02d}:{1}->{2},{3})".format(i,u,v,d))
 			F.add(Clause(-r,p))
 			F.add(Clause(-r,q))
 
@@ -75,10 +73,10 @@ def EUL_to_SAT(G,cycle_length=None):
 			F.add(Clause(-p,-q))
 
 	## don't use same edge twice
-	for u,v in G.edges():
+	for (u,v,d) in G.edges(data=True):
 		for i,j in itertools.combinations(range(cycle_length),2):
-			p = Prop("edge_used({0:02d}:{1},{2})".format(i,u,v))
-			q = Prop("edge_used({0:02d}:{1},{2})".format(j,u,v))
+			p = Prop("edge_used({0:02d}:{1}->{2},{3})".format(i,u,v,d))
+			q = Prop("edge_used({0:02d}:{1}->{2},{3})".format(j,u,v,d))
 			F.add(Clause(-p,-q))
 
 	return F

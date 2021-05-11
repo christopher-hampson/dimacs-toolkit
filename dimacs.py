@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# =============================================================================
+# Created By  : Christopher Hampson
+# Created Date: 10-May-2021
+# =============================================================================
 import subprocess
 
 class Formula:
@@ -7,6 +13,9 @@ class Formula:
 
 	def add(self,C):
 		self.clauses.append(C)
+
+	def info(self):
+		return "Number of Clauses: {0}\nNumber of Variables: {1}".format(len(self.clauses),len(self.get_props()))
 
 	def get_props(self):
 		return set.union(*[C.get_props() for C in self.clauses])
