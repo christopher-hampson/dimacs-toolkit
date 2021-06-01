@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # =============================================================================
 # Created By  : Christopher Hampson
-# Created Date: 10-May-2021
+# Created Date: 31-May-2021
 # =============================================================================
 import subprocess
 
@@ -10,6 +10,7 @@ class Formula:
 
 	def __init__(self,*clauses):
 		self.clauses = [C for C in clauses]
+		self.solutions = []
 
 	def add(self,C):
 		self.clauses.append(C)
@@ -25,8 +26,8 @@ class Formula:
 
 	def get_proposition_dict(self):
 		order = sorted(self.get_props())
-		self.prop_to_int = dict([(L,order.index(L)+1) for L in order])
-		self.int_to_prop = dict([(order.index(L)+1,L) for L in order])
+		self.prop_to_int = dict([(L,order.index(L)+1) for L in order]+[(-L,-1*(order.index(L)+1)) for L in order])
+		self.int_to_prop = dict([(order.index(L)+1,L) for L in order]+[(-1*(order.index(L)+1),-L) for L in order])
 
 
 	def to_dimacs(self):
@@ -35,17 +36,55 @@ class Formula:
 		header = "p cnf {0} {1}\n".format(len(self.prop_to_int.keys()),len(self.clauses))
 		return header + "\n".join([C.to_dimacs(self.prop_to_int) for C in self.clauses])
 
-	def is_satisfiable(self):
+
+	def solve(self,filename="test_sat.dimacs"):
+		## write dimacs to file
+		with open(filename,'w') as f:
+			f.write(self.to_dimacs())
+
+		## call MiniSat SAT-solver (from file)
 		try:
-			is_sat, T, F = solve_dimacs(self.to_dimacs())
+			proc = subprocess.Popen(["./MiniSat {0} output".format(filename)],shell=True,stdout=subprocess.PIPE)
+			proc.communicate()[0]
 		except:
-			raise Exception("Failed to Solve DIMACS")
-		
-		if is_sat:
-			self.get_proposition_dict()
-			return sorted([self.int_to_prop.get(L) for L in T])
-		else:
-			return False
+			raise Exception("Failed to solve DIMACS; MiniSat failed.")
+
+		## call MiniSat SAT-solver (from stdin)
+		# proc = subprocess.Popen(["./MiniSat"],shell=True,stdin=subprocess.PIPE,stdout=subprocess.PIPE)
+		# proc.stdin.write(dimacs)
+		# print(proc.communicate()[0])
+		# exit()
+
+		## process output
+		val = None
+		with open('output','r') as f:
+			line = f.read().split("\n")
+			if line[0]=="SAT":
+				val = [int(x) for x in line[1].split(" ") if int(x)!=0]
+				val =  sorted([self.int_to_prop.get(x) for x in val])
+		return val
+
+	def all_solutions(self):
+		## generator to yield all solutions
+		F = Formula(*self.clauses)
+		soln = True
+		while soln is not None:
+			soln = F.solve()
+			if soln is not None:
+				## yield solution
+				yield soln
+
+				## append negated solution
+				F.add(Clause(*[-L for L in soln]))
+
+	def count_solutions(self):
+		## return number of solutions
+		return len(list(self.all_solutions()))
+
+
+	def is_satisfiable(self):
+		## return True iff fomula has at least 1 solution
+		return self.solve() != None
 
 
 
@@ -55,7 +94,7 @@ class Clause:
 		self.literals = [L for L in literals]
 
 	def get_props(self):
-		return set([L.label for L in self.literals])
+		return set([abs(L) for L in self.literals])
 
 	def add(self,L):
 		self.literals.append(L)
@@ -76,6 +115,15 @@ class Prop:
 	def __hash__(self):
 		return hash(self.label)
 
+	def __eq__(self,other):
+		return self.label == other.label and self.parity==other.parity
+
+	def __abs__(self):
+		if self.parity<1:
+			return -self
+		else:
+			return self
+
 	def __repr__(self):
 		if self.parity>0:
 			return str(self.label)
@@ -87,34 +135,22 @@ class Prop:
 
 	def to_dimacs(self,prop_dict):
 		## returns a dimacs representation of the literal
-		if self.parity>0:
-			return str(prop_dict.get(self.label))
-		else:
-			return "-" + str(prop_dict.get(self.label))
+		return str(prop_dict.get(self))
 
 
-def solve_dimacs(dimacs,filename="test_sat.dimacs"):
-	## write dimacs to file
-	with open(filename,'w') as f:
-		f.write(dimacs)
-	# print("Dimacs successfully written to file.")
 
-	# call MiniSat SAT-solver
-	proc = subprocess.Popen(["./MiniSat {0} output".format(filename)],shell=True,stdout=subprocess.PIPE)
-	print(proc.communicate()[0])
+if __name__=="__main__":
 
-	## process output
-	with open('output','r') as f:
-		line = f.read().split("\n")
-		if line[0]=="SAT":
-			T_set, F_set = set(), set()
-			for L in [int(x) for x in line[1].split(" ")]:
-				if L>0:
-					T_set.add(L)
-				else:
-					F_set.add(-1*L)
+	F = Formula()
 
-			return True, T_set, F_set
-		else:
-			return False, None, None
+	p = Prop("p")
+	q = Prop("q")
+	F.add(Clause(-p,q))
+	F.add(Clause(-q,p))
+
+	print(F.to_dimacs())
+	print(list(F.all_solutions()))
+
+	print(F.count_solutions())
+
 
