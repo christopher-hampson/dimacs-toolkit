@@ -13,7 +13,7 @@ def labEUL_to_SAT(G,cycle_length=8):
 	## cycle length
 	labels = set()
 
-	F = EUL_to_SAT(G,cycle_length=cycle_length)
+	F = cycle_formula(G,cycle_length)
 		
 	## list labels used
 	for (u,v,data) in G.edges(data=True):
@@ -38,6 +38,51 @@ def EUL_to_SAT(G,cycle_length=None):
 	if cycle_length==None:
 		cycle_length = len(G.edges())
 
+	F = cycle_formula(G,cycle_length)
+
+	# ## Initial vertex
+	# initial_vertex,d = max(G.nodes(data=True),key=lambda (n, d): d.get('initial',False) == True)
+	# p = Prop("position({0:02d},{1})".format(0,initial_vertex))
+	# F.add(Clause(p))
+
+	# ## ith edge must be adjacent to vertex in position i
+	# for u in G.nodes():
+	# 	for i in range(cycle_length):
+	# 		p = Prop("position({0:02d},{1})".format(i,u))
+	# 		C = Clause(-p)
+	# 		for (u1,v,d) in [e for e in G.edges(data=True) if e[0]==u]:
+	# 			q = Prop("edge_used({0:02d}:{1}->{2},{3})".format(i,u,v,d))
+	# 			C.add(q)
+	# 		F.add(C)
+
+	# ## path coherence (if edge (u,v) is ith edge then u is ith vertex and v is (i+1)th vertex)
+	# for (u,v,d) in G.edges(data=True):
+	# 	for i in range(cycle_length):
+	# 		j = (i+1)%cycle_length
+	# 		p = Prop("position({0:02d},{1})".format(i,u))
+	# 		q = Prop("position({0:02d},{1})".format(j,v))
+	# 		r = Prop("edge_used({0:02d}:{1}->{2},{3})".format(i,u,v,d))
+	# 		F.add(Clause(-r,p))
+	# 		F.add(Clause(-r,q))
+
+	# ## two vertices can't be in same position i
+	# for u,v in itertools.permutations(G.nodes(),2):
+	# 	for i in range(cycle_length):
+	# 		p = Prop("position({0:02d},{1})".format(i,u))
+	# 		q = Prop("position({0:02d},{1})".format(i,v))
+	# 		F.add(Clause(-p,-q))
+
+	## don't use same edge twice
+	for (u,v,d) in G.edges(data=True):
+		for i,j in itertools.combinations(range(cycle_length),2):
+			p = Prop("edge_used({0:02d}:{1}->{2},{3})".format(i,u,v,d))
+			q = Prop("edge_used({0:02d}:{1}->{2},{3})".format(j,u,v,d))
+			F.add(Clause(-p,-q))
+
+	return F
+
+
+def cycle_formula(G,cycle_length):
 	F = Formula()
 
 	## Initial vertex
@@ -72,14 +117,8 @@ def EUL_to_SAT(G,cycle_length=None):
 			q = Prop("position({0:02d},{1})".format(i,v))
 			F.add(Clause(-p,-q))
 
-	## don't use same edge twice
-	for (u,v,d) in G.edges(data=True):
-		for i,j in itertools.combinations(range(cycle_length),2):
-			p = Prop("edge_used({0:02d}:{1}->{2},{3})".format(i,u,v,d))
-			q = Prop("edge_used({0:02d}:{1}->{2},{3})".format(j,u,v,d))
-			F.add(Clause(-p,-q))
-
 	return F
+
 
 
 def HAM_to_SAT(G):
@@ -155,14 +194,17 @@ if __name__=="__main__":
 	G.add_edges_from([(1,2),(2,3),(3,4),(4,5),(5,1),(2,4),(1,4),(2,5)])
 	G.add_edges_from([(2,1),(3,2),(4,3),(5,4),(1,5),(4,2),(4,1),(5,2)])
 
-	G = nx.dodecahedral_graph(create_using=None).to_directed()
+	# G = nx.dodecahedral_graph(create_using=None).to_directed()
 
 	print(nx.info(G))
 
-	F = labEUL_to_SAT(G)
+	F = EUL_to_SAT(G)
 
 	print(F)
 
 
-	# for x in F.is_satisfiable():
-	# 	print(x)
+	for x in sorted(F.solve()):
+		if x.parity>0:
+			print(x)
+
+
